@@ -1,11 +1,12 @@
 import hashlib
 import os
+from typing import Optional
 import psycopg2
 from datetime import datetime
 import tkinter
 
 # Хэш файла
-def hash_file(file_path: str) -> str:
+def hash_file(file_path: str) -> Optional[str]:
     sha256 = hashlib.sha256()
     try:
         with open(file_path, 'rb') as f:
@@ -17,7 +18,7 @@ def hash_file(file_path: str) -> str:
         return None
 
 # Хэш папки
-def hash_folder(folder_path: str) -> str:
+def hash_folder(folder_path: str) -> Optional[str]:
     sha256 = hashlib.sha256()
     try:
         for root, _, files in sorted(os.walk(folder_path)):
@@ -34,7 +35,7 @@ def hash_folder(folder_path: str) -> str:
         return None
 
 # Выбор и расчет хэша для файла или папки
-def calculate_hash(resource_path: str) -> str:
+def calculate_hash(resource_path: str) -> Optional[str]:
     if not os.path.exists(resource_path):
         print(f"Файл/папка не существует: {resource_path}")
         return None
@@ -46,13 +47,25 @@ def calculate_hash(resource_path: str) -> str:
         print(f"Неподдерживаемый тип: {resource_path}")
         return None
 
+# Извлечение имени файла или папки
+def get_resource_name(resource_path: str) -> Optional[str]:
+    try:
+        return os.path.basename(resource_path)
+    except Exception as e:
+        print(f"Ошибка при извлечении имени из пути {resource_path}: {e}")
+        return None
+
 if __name__ == "__main__":
     test_file = r"D:\123.txt"
     file_hash = calculate_hash(test_file)
+    file_name = get_resource_name(test_file)
     if file_hash:
         print(f"Хэш файла {test_file}: {file_hash}")
+    print(f"Имя файла: {file_name}")
     
     test_folder = r"D:\Wireshark"
     folder_hash = calculate_hash(test_folder)
+    folder_name = get_resource_name(test_folder)
     if folder_hash:
         print(f"Хэш папки {test_folder}: {folder_hash}")
+    print(f"Имя папки: {folder_name}")
