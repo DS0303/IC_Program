@@ -34,7 +34,7 @@ def hash_folder(folder_path: str) -> Optional[str]:
         print(f"Ошибка при обработке папки {folder_path}: {e}")
         return None
 
-# Выбор и расчет хэша для файла или папки
+# Выбор и расчет хэша для ресурса
 def calculate_hash(resource_path: str) -> Optional[str]:
     if not os.path.exists(resource_path):
         print(f"Файл/папка не существует: {resource_path}")
@@ -47,7 +47,7 @@ def calculate_hash(resource_path: str) -> Optional[str]:
         print(f"Неподдерживаемый тип: {resource_path}")
         return None
 
-# Извлечение имени файла или папки
+# Извлечение имени ресурса
 def get_resource_name(resource_path: str) -> Optional[str]:
     try:
         return os.path.basename(resource_path)
@@ -55,7 +55,48 @@ def get_resource_name(resource_path: str) -> Optional[str]:
         print(f"Ошибка при извлечении имени из пути {resource_path}: {e}")
         return None
 
+# Добавление ресурса в базу данных
+def add_resource_to_db(conn, resource_path: str) -> bool:
+    resource_name = get_resource_name(resource_path)
+    resource_type = "file" if os.path.isfile(resource_path) else "folder" if os.path.isdir(resource_path) else None
+    current_time = datetime.now()
+    if not resource_name or not resource_type or not os.path.exists(resource_path):
+        print(f"Не удалось добавить ресурс {resource_path}: некорректные данные или ресурс не существует")
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM resource_monitoring WHERE resource_path = %s", (resource_path,))
+            count = cur.fetchone()[0]
+            if count > 0:
+                print(f"Ресурс {resource_path} уже существует в базе данных")
+                return False
+            cur.execute("""
+                INSERT INTO resource_monitoring (resource_path, resource_name, resource_type, added_date)
+                VALUES (%s, %s, %s, %s)
+            """, (resource_path, resource_name, resource_type, current_time))
+            conn.commit()
+            print(f"Ресурс {resource_path} успешно добавлен в БД")
+            return True
+    except psycopg2.Error as e:
+        print(f"Ошибка при записи в БД для {resource_path}: {e}")
+        conn.rollback()
+        return False
+
 if __name__ == "__main__":
+
+    # Подключение к базе данных
+    try:
+        conn = psycopg2.connect(
+            dbname="ic_db",
+            user="postgres",
+            password="Qwerty123",
+            host="localhost",
+            port="5432"
+        )
+    except psycopg2.Error as e:
+        print(f"Ошибка подключения к БД: {e}")
+        exit()
+
     test_file = r"D:\123.txt"
     file_hash = calculate_hash(test_file)
     file_name = get_resource_name(test_file)
@@ -69,3 +110,10 @@ if __name__ == "__main__":
     if folder_hash:
         print(f"Хэш папки {test_folder}: {folder_hash}")
     print(f"Имя папки: {folder_name}")
+
+    # Добавляем ресурсы в БД
+    add_resource_to_db(conn, test_file)
+    add_resource_to_db(conn, test_folder)
+
+    # Закрываем соединение
+    conn.close()
