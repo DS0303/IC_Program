@@ -4,6 +4,22 @@ import psycopg2
 from typing import Optional
 from datetime import datetime
 
+# Подключение к базе данных
+def connect_to_db(dbname: str, user: str, password: str, host: str = "localhost", port: str = "5432") -> psycopg2.extensions.connection:
+    try:
+        conn = psycopg2.connect(
+            dbname=dbname,
+            user=user,
+            password=password,
+            host=host,
+            port=port
+        )
+        print(f"Успешно подключено к базе данных {dbname}")
+        return conn
+    except psycopg2.Error as e:
+        print(f"Ошибка подключения к БД: {e}")
+        raise
+
 # Хэш файла
 def hash_file(file_path: str) -> Optional[str]:
     sha256 = hashlib.sha256()
@@ -80,3 +96,55 @@ def add_resource_to_db(conn, resource_path: str) -> bool:
         print(f"Ошибка при записи в БД для {resource_path}: {e}")
         conn.rollback()
         return False
+    
+# Обновление хэшей для всех ресурсов в базе данных
+def update_all_hashes(conn) -> None:
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT resource_path FROM resource_monitoring")
+            resources = cur.fetchall()
+            if not resources:
+                print("В базе данных нет ресурсов для расчета хэшей")
+                return
+            updated_count = 0
+            for (resource_path,) in resources:
+                hash_value = calculate_hash(resource_path)
+                if hash_value:
+                    current_time = datetime.now()
+                    cur.execute("""
+                        UPDATE resource_monitoring
+                        SET hash = %s, hash_date = %s
+                        WHERE resource_path = %s
+                    """, (hash_value, current_time, resource_path))
+                    updated_count += 1
+                else:
+                    print(f"Не удалось рассчитать хэш для {resource_path}, пропускаем")
+            conn.commit()
+            print(f"Хэши успешно рассчитаны и обновлены для {updated_count} ресурсов")
+    except psycopg2.Error as e:
+        print(f"Ошибка при обновлении хэшей в БД: {e}")
+        conn.rollback()
+
+# Проверка целостности всех ресурсов в базе данных
+def check_all_hashes(conn) -> None:
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT resource_path, hash FROM resource_monitoring")
+            resources = cur.fetchall()
+            if not resources:
+                print("В базе данных нет ресурсов для проверки")
+                return
+            for resource_path, stored_hash in resources:
+                current_hash = calculate_hash(resource_path)
+                if current_hash is None:
+                    print(f"Ресурс {resource_path}: невозможно проверить (ресурс недоступен)")
+                elif stored_hash is None:
+                    print(f"Ресурс {resource_path}: хэш в БД отсутствует")
+                elif current_hash == stored_hash:
+                    print(f"Ресурс {resource_path}: целостность подтверждена")
+                else:
+                    print(f"Ресурс {resource_path}: целостность нарушена")
+            conn.commit()
+    except psycopg2.Error as e:
+        print(f"Ошибка при проверке хэшей в БД: {e}")
+        conn.rollback()
