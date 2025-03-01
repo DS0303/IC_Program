@@ -1,6 +1,7 @@
 import hashlib
 import os
 import psycopg2
+import threading
 from typing import Optional
 from datetime import datetime
 
@@ -97,6 +98,25 @@ def add_resource_to_db(conn, resource_path: str) -> bool:
         conn.rollback()
         return False
     
+
+# Удаление ресурса из базы данных
+def remove_resource_from_db(conn, resource_path: str) -> bool:
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM resource_monitoring WHERE resource_path = %s", (resource_path,))
+            count = cur.fetchone()[0]
+            if count == 0:
+                print(f"Ресурс {resource_path} не найден в базе данных")
+                return False            
+            cur.execute("DELETE FROM resource_monitoring WHERE resource_path = %s", (resource_path,))
+            conn.commit()
+            print(f"Ресурс {resource_path} успешно удалён из БД")
+            return True
+    except psycopg2.Error as e:
+        print(f"Ошибка при удалении ресурса {resource_path}: {e}")
+        conn.rollback()
+        return False
+    
 # Обновление хэшей для всех ресурсов в базе данных
 def update_all_hashes(conn) -> None:
     try:
@@ -148,3 +168,43 @@ def check_all_hashes(conn) -> None:
     except psycopg2.Error as e:
         print(f"Ошибка при проверке хэшей в БД: {e}")
         conn.rollback()
+
+# Вывод списка всех ресурсов в базе данных
+def list_all_resources(conn) -> list:
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT resource_path, resource_name, resource_type, added_date, hash, hash_date 
+                FROM resource_monitoring
+                ORDER BY added_date
+            """)
+            resources = cur.fetchall()
+            
+            if not resources:
+                print("В базе данных нет ресурсов")
+            else:
+                print("Список контролируемых ресурсов:")
+                for res in resources:
+                    path, name, rtype, added, _, hash_date = res
+                    hash_date_str = hash_date if hash_date else "Нет данных"
+                    print(f"Путь: {path}, Имя: {name}, Тип: {rtype}, Добавлен: {added}, Дата хэша: {hash_date_str}")
+            return resources
+    except psycopg2.Error as e:
+        print(f"Ошибка при получении списка ресурсов: {e}")
+        conn.rollback()
+        return []
+    
+# Запуск фоовой проверки целостности всех ресурсов
+def start_background_check(conn, interval: int) -> None:
+
+    def periodic_check():
+        while True:
+            print(f"Начало фоновой проверки в {datetime.now()}")
+            check_all_hashes(conn)
+            threading.Event().wait(interval)
+    if interval <= 0:
+        print("Интервал должен быть положительным числом")
+        return
+    thread = threading.Thread(target=periodic_check, daemon=True)
+    thread.start()
+    print(f"Фоновая проверка запущена с интервалом {interval} секунд")
