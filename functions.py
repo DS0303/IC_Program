@@ -3,7 +3,7 @@ import hashlib
 import os
 import psycopg2
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Callable
 import threading
 
 _stop_background = False  # Глобальный флаг для остановки фоновой проверки
@@ -209,8 +209,8 @@ def list_all_resources(conn) -> list:
         conn.rollback()
         return []
 
-# Запуск фоновой проверки
-def start_background_check(conn, interval: int) -> None:
+# Запуск фоновой проверки с callback для уведомлений о нарушениях и обновления таблицы
+def start_background_check(conn, interval: int, alert_callback: Callable[[int], None] = None, refresh_callback: Callable[[], None] = None) -> None:
     global _stop_background
     global _background_thread
     global _background_event
@@ -229,10 +229,19 @@ def start_background_check(conn, interval: int) -> None:
     def periodic_check():
         while not _stop_background:
             print(f"Начало фоновой проверки в {datetime.now()}")
-            check_all_hashes(conn)
+            # Выполняем проверку и получаем результаты
+            results = check_all_hashes(conn)
+            # Подсчитываем количество нарушений (статус "failed")
+            failed_count = sum(1 for status in results.values() if status == "failed")
+            # Если есть нарушения и задан callback, вызываем его
+            if failed_count > 0 and alert_callback:
+                alert_callback(failed_count)
+                break  # Прерываем цикл, чтобы остановить фоновую проверку
+            # Обновляем таблицу через callback
+            if refresh_callback:
+                # Вызываем обновление таблицы в главном потоке
+                refresh_callback()
             _background_event.wait(interval)
-            if _stop_background:
-                break
 
     if interval <= 0:
         print("Интервал должен быть положительным числом")
@@ -251,8 +260,7 @@ def stop_background_check() -> None:
     _stop_background = True
     if _background_event:
         _background_event.set()  # Прерываем ожидание
-    if _background_thread:
-        _background_thread.join()  # Ждём завершения потока
-        _background_thread = None  # Сбрасываем поток
-        _background_event = None   # Сбрасываем Event
+    # Удаляем вызов join(), чтобы избежать deadlock
+    _background_thread = None
+    _background_event = None
     print("Фоновая проверка остановлена")

@@ -52,7 +52,7 @@ class IntegrityMonitoringApp:
         self.interval_var = tk.StringVar(value="10")
         ttk.Entry(bg_frame, textvariable=self.interval_var, width=5).pack(side="left", padx=2)
         # Добавляем выпадающий список для выбора единиц измерения
-        self.interval_unit = tk.StringVar(value="Секунды")
+        self.interval_unit = tk.StringVar(value="сек.")
         ttk.Combobox(bg_frame, textvariable=self.interval_unit, values=["сек.", "мин.", "ч."], state="readonly", width=10).pack(side="left", padx=2)
         ttk.Button(bg_frame, text="Запустить фоновую проверку", command=self.start_background_check).pack(side="left", padx=2)
         ttk.Button(bg_frame, text="Остановить", command=self.stop_background_check).pack(side="left", padx=2)
@@ -94,6 +94,14 @@ class IntegrityMonitoringApp:
 
         # Обновляем таблицу после создания всех виджетов
         self.refresh_resources()
+
+    # Callback для отображения messagebox с количеством нарушений
+    def violations_alert(self, failed_count):
+        # Отображаем messagebox в главном потоке
+        self.root.after(0, lambda: messagebox.showwarning("Нарушение целостности", f"Обнаружено нарушений целостности: {failed_count}\nФоновая проверка остановлена"))
+        # Останавливаем фоновую проверку и обновляем таблицу в главном потоке
+        self.root.after(0, self.stop_background_check)
+        self.root.after(0, self.check_hashes)
 
     # Добавление файлов
     def add_file(self):
@@ -137,21 +145,32 @@ class IntegrityMonitoringApp:
     # Запуск фоновой проверки
     def start_background_check(self):
         try:
+            # Получаем и валидируем интервал
             interval = int(self.interval_var.get())
             if interval <= 0:
                 raise ValueError("Интервал должен быть положительным")
 
-            # Конвертируем интервал в секунды в зависимости от выбранной единицы
+            # Получаем единицу измерения
             unit = self.interval_unit.get()
-            if unit == "Секунды":
+            if unit not in ["сек.", "мин.", "ч."]:
+                raise ValueError("Некорректная единица измерения интервала")
+
+            # Конвертируем интервал в секунды
+            if unit == "сек.":
                 interval_in_seconds = interval
-            elif unit == "Минуты":
+            elif unit == "мин.":
                 interval_in_seconds = interval * 60
-            elif unit == "Часы":
+            elif unit == "ч.":
                 interval_in_seconds = interval * 3600
 
             self.background_check_running = True
-            func.start_background_check(self.conn, interval_in_seconds)
+            # Передаём callback для уведомления о нарушениях и обновления таблицы
+            func.start_background_check(
+                self.conn,
+                interval_in_seconds,
+                self.violations_alert,
+                lambda: self.root.after(0, self.refresh_resources)  # Обновляем таблицу в главном потоке
+            )
         except ValueError as e:
             messagebox.showerror("Ошибка", str(e))
 
