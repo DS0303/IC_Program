@@ -10,23 +10,8 @@ _stop_background = False  # Глобальный флаг для останов�
 _background_thread = None  # Глобальная переменная для хранения потока
 _background_event = None  # Объект Event для управления ожиданием
 
+# Подключение к базе данных
 def connect_to_db(dbname: str, user: str, password: str, host: str = "localhost", port: str = "5432") -> psycopg2.extensions.connection:
-    """
-    Устанавливает соединение с базой данных PostgreSQL.
-    
-    Args:
-        dbname (str): Имя базы данных
-        user (str): Имя пользователя
-        password (str): Пароль
-        host (str): Хост (по умолчанию "localhost")
-        port (стр): Порт (по умолчанию "5432")
-    
-    Returns:
-        psycopg2.extensions.connection: Объект соединения с базой данных
-    
-    Raises:
-        psycopg2.Error: Если подключение не удалось
-    """
     try:
         conn = psycopg2.connect(
             dbname=dbname,
@@ -41,8 +26,8 @@ def connect_to_db(dbname: str, user: str, password: str, host: str = "localhost"
         print(f"Ошибка подключения к БД: {e}")
         raise
 
+# Расчет хэша для файла
 def hash_file(file_path: str) -> Optional[str]:
-    """Расчет хэша для файла."""
     sha256 = hashlib.sha256()
     try:
         with open(file_path, 'rb') as f:
@@ -53,8 +38,8 @@ def hash_file(file_path: str) -> Optional[str]:
         print(f"Ошибка при чтении файла {file_path}: {e}")
         return None
 
+# Расчет хэша для папки
 def hash_folder(folder_path: str) -> Optional[str]:
-    """Расчет хэша для папки."""
     sha256 = hashlib.sha256()
     try:
         for root, _, files in sorted(os.walk(folder_path)):
@@ -70,8 +55,8 @@ def hash_folder(folder_path: str) -> Optional[str]:
         print(f"Ошибка при обработке папки {folder_path}: {e}")
         return None
 
+# Расчет хэша для ресурса
 def calculate_hash(resource_path: str) -> Optional[str]:
-    """Выбор и расчет хэша для файла или папки."""
     if not os.path.exists(resource_path):
         print(f"Файл/папка не существует: {resource_path}")
         return None
@@ -83,8 +68,8 @@ def calculate_hash(resource_path: str) -> Optional[str]:
         print(f"Неподдерживаемый тип: {resource_path}")
         return None
 
+# Извлечение имени ресурса из пути
 def get_resource_name(resource_path: str) -> str:
-    """Извлечение имени файла или папки из пути."""
     try:
         cleaned_path = resource_path.rstrip(os.sep)
         return os.path.basename(cleaned_path)
@@ -92,17 +77,8 @@ def get_resource_name(resource_path: str) -> str:
         print(f"Ошибка при извлечении имени из пути {resource_path}: {e}")
         return ""
 
+# Добавление ресурса в базу данных
 def add_resource_to_db(conn, resource_path: str) -> bool:
-    """
-    Добавляет путь к файлу/папке и его имя в базу данных, если такого пути ещё нет.
-    
-    Args:
-        conn: Соединение с базой данных psycopg2
-        resource_path (str): Полный путь к файлу или папке
-    
-    Returns:
-        bool: True если запись добавлена, False если ресурс уже существует или произошла ошибка
-    """
     resource_name = get_resource_name(resource_path)
     resource_type = "file" if os.path.isfile(resource_path) else "folder" if os.path.isdir(resource_path) else None
     current_time = datetime.now()
@@ -132,13 +108,8 @@ def add_resource_to_db(conn, resource_path: str) -> bool:
         conn.rollback()
         return False
 
+# Обновление хэшей для всех ресурсов
 def update_all_hashes(conn) -> None:
-    """
-    Рассчитывает хэш для всех ресурсов в базе данных и обновляет поля hash и hash_date.
-    
-    Args:
-        conn: Соединение с базой данных psycopg2
-    """
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT resource_path FROM resource_monitoring")
@@ -168,16 +139,8 @@ def update_all_hashes(conn) -> None:
         print(f"Ошибка при обновлении хэшей в БД: {e}")
         conn.rollback()
 
+# Проверка хэшей для всех ресурсов
 def check_all_hashes(conn) -> dict:
-    """
-    Проверяет целостность всех ресурсов в базе данных, сравнивая текущие хэши с сохранёнными.
-    
-    Args:
-        conn: Соединение с базой данных psycopg2
-    
-    Returns:
-        dict: Словарь с результатами проверки {resource_path: status}, где status может быть "passed", "failed", "unavailable", "no_hash"
-    """
     results = {}  # Словарь для хранения результатов проверки
     try:
         with conn.cursor() as cur:
@@ -210,17 +173,8 @@ def check_all_hashes(conn) -> dict:
         conn.rollback()
         return results
 
+# Удаление ресурса из базы данных
 def remove_resource_from_db(conn, resource_path: str) -> bool:
-    """
-    Удаляет ресурс из базы данных по заданному пути.
-    
-    Args:
-        conn: Соединение с базой данных psycopg2
-        resource_path (str): Полный путь к ресурсу
-    
-    Returns:
-        bool: True если удаление успешно, False если ресурс не найден или произошла ошибка
-    """
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM resource_monitoring WHERE resource_path = %s", (resource_path,))
@@ -239,16 +193,8 @@ def remove_resource_from_db(conn, resource_path: str) -> bool:
         conn.rollback()
         return False
 
+# Получение списка всех ресурсов
 def list_all_resources(conn) -> list:
-    """
-    Возвращает список всех ресурсов в базе данных.
-    
-    Args:
-        conn: Соединение с базой данных psycopg2
-    
-    Returns:
-        list: Список кортежей с данными ресурсов (resource_path, resource_name, resource_type, added_date, hash, hash_date)
-    """
     try:
         with conn.cursor() as cur:
             cur.execute("""
@@ -263,14 +209,8 @@ def list_all_resources(conn) -> list:
         conn.rollback()
         return []
 
+# Запуск фоновой проверки
 def start_background_check(conn, interval: int) -> None:
-    """
-    Запускает фоновую проверку целостности всех ресурсов с заданным интервалом.
-    
-    Args:
-        conn: Соединение с базой данных psycopg2
-        interval (int): Интервал проверки в секундах
-    """
     global _stop_background
     global _background_thread
     global _background_event
@@ -302,8 +242,8 @@ def start_background_check(conn, interval: int) -> None:
     _background_thread.start()
     print(f"Фоновая проверка запущена с интервалом {interval} секунд")
 
+# Остановка фоновой проверки
 def stop_background_check() -> None:
-    """Останавливает фоновую проверку."""
     global _stop_background
     global _background_thread
     global _background_event
