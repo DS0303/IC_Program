@@ -1,4 +1,3 @@
-# functions.py
 import hashlib
 import os
 import psycopg2
@@ -34,6 +33,12 @@ def hash_file(file_path: str) -> Optional[str]:
             for chunk in iter(lambda: f.read(4096), b""):
                 sha256.update(chunk)
         return sha256.hexdigest()
+    except PermissionError as e:
+        print(f"Ошибка доступа к файлу {file_path}: отсутствуют права доступа ({e})")
+        return None
+    except OSError as e:
+        print(f"Ошибка при чтении файла {file_path}: файл используется другим процессом или недоступен ({e})")
+        return None
     except Exception as e:
         print(f"Ошибка при чтении файла {file_path}: {e}")
         return None
@@ -50,7 +55,12 @@ def hash_folder(folder_path: str) -> Optional[str]:
                 file_hash = hash_file(file_path)
                 if file_hash:
                     sha256.update(file_hash.encode('utf-8'))
+                else:
+                    print(f"Пропущен файл {file_path} из-за ошибки доступа, продолжаем расчёт хэша для остальных файлов")
         return sha256.hexdigest()
+    except PermissionError as e:
+        print(f"Ошибка доступа к папке {folder_path}: отсутствуют права доступа ({e})")
+        return None
     except Exception as e:
         print(f"Ошибка при обработке папки {folder_path}: {e}")
         return None
@@ -210,7 +220,7 @@ def list_all_resources(conn) -> list:
         return []
 
 # Запуск фоновой проверки с callback для уведомлений о нарушениях и обновления таблицы
-def start_background_check(conn, interval: int, alert_callback: Callable[[int], None] = None, refresh_callback: Callable[[], None] = None) -> None:
+def start_background_check(conn, interval: int, alert_callback: Callable[[int, list], None] = None, refresh_callback: Callable[[], None] = None) -> None:
     global _stop_background
     global _background_thread
     global _background_event
@@ -231,11 +241,12 @@ def start_background_check(conn, interval: int, alert_callback: Callable[[int], 
             print(f"Начало фоновой проверки в {datetime.now()}")
             # Выполняем проверку и получаем результаты
             results = check_all_hashes(conn)
-            # Подсчитываем количество нарушений (статус "failed")
-            failed_count = sum(1 for status in results.values() if status == "failed")
+            # Подсчитываем количество нарушений (статус "failed") и собираем пути
+            failed_paths = [path for path, status in results.items() if status == "failed"]
+            failed_count = len(failed_paths)
             # Если есть нарушения и задан callback, вызываем его
             if failed_count > 0 and alert_callback:
-                alert_callback(failed_count)
+                alert_callback(failed_count, failed_paths)
                 break  # Прерываем цикл, чтобы остановить фоновую проверку
             # Обновляем таблицу через callback
             if refresh_callback:

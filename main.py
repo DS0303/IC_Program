@@ -1,4 +1,3 @@
-# main.py
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import functions as func
@@ -9,7 +8,7 @@ class IntegrityMonitoringApp:
         self.root = root
         self.root.title("Система контроля целостности")
         self.root.geometry("800x600")
-        self.root.minsize(1070, 500)  # Минимальный размер окна
+        self.root.minsize(1045, 500)  # Минимальный размер окна
 
         # Подключение к базе данных
         try:
@@ -66,12 +65,14 @@ class IntegrityMonitoringApp:
         self.tree = ttk.Treeview(self.tree_frame, columns=columns, show="headings")
         # Устанавливаем тему и шрифт
         style = ttk.Style()
-        style.theme_use("clam")
         style.configure("Treeview", font=("Arial", 10))
         # Теги для цветовой разметки
         self.tree.tag_configure("passed", background="lightgreen")
         self.tree.tag_configure("failed", background="lightcoral")
         self.tree.tag_configure("unavailable", background="lightgray")
+        # Теги для чередующегося фона
+        self.tree.tag_configure("oddrow", background="white")
+        self.tree.tag_configure("evenrow", background="#F0F0F0")
         # Заголовки столбцов
         self.tree.heading("status", text="Статус")
         self.tree.heading("path", text="Путь")
@@ -79,6 +80,7 @@ class IntegrityMonitoringApp:
         self.tree.heading("type", text="Тип")
         self.tree.heading("added_date", text="Добавлен")
         self.tree.heading("hash_date", text="Дата хэша")
+        # Устанавливаем ширину столбцов
         self.tree.column("status", width=1, anchor=tk.CENTER)
         self.tree.column("path", width=200)
         self.tree.column("name", width=100)
@@ -86,19 +88,21 @@ class IntegrityMonitoringApp:
         self.tree.column("added_date", width=12)
         self.tree.column("hash_date", width=12)
 
-        # Скроллбар для таблицы
+        # Скроллбар для таблицы (вертикальный)
         scrollbar = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
         scrollbar.pack(side="right", fill="y")
         self.tree.configure(yscrollcommand=scrollbar.set)
+        
         self.tree.pack(fill="both", expand=True)
 
         # Обновляем таблицу после создания всех виджетов
         self.refresh_resources()
 
-    # Callback для отображения messagebox с количеством нарушений
-    def violations_alert(self, failed_count):
+    # Callback для отображения messagebox с количеством нарушений и путями
+    def violations_alert(self, failed_count, failed_paths):
+        paths_str = "\n".join(failed_paths)
         # Отображаем messagebox в главном потоке
-        self.root.after(0, lambda: messagebox.showwarning("Нарушение целостности", f"Обнаружено нарушений целостности: {failed_count}\nФоновая проверка остановлена"))
+        self.root.after(0, lambda: messagebox.showwarning("Нарушение целостности", f"Обнаружено нарушений целостности: {failed_count}\nФоновая проверка остановлена\n\nПути с нарушениями:\n{paths_str}"))
         # Останавливаем фоновую проверку и обновляем таблицу в главном потоке
         self.root.after(0, self.stop_background_check)
         self.root.after(0, self.check_hashes)
@@ -168,7 +172,7 @@ class IntegrityMonitoringApp:
             func.start_background_check(
                 self.conn,
                 interval_in_seconds,
-                self.violations_alert,
+                lambda count, paths: self.violations_alert(count, paths),
                 lambda: self.root.after(0, self.refresh_resources)  # Обновляем таблицу в главном потоке
             )
         except ValueError as e:
@@ -197,7 +201,8 @@ class IntegrityMonitoringApp:
 
             # Определяем статус для отображения
             status = ""
-            tags = ()
+            # Чередующийся фон для строк без статуса
+            tags = ("oddrow",) if len(self.tree.get_children()) % 2 == 0 else ("evenrow",)
             if path in self.check_status:
                 if self.check_status[path] == "passed":
                     status = "\u2714"
