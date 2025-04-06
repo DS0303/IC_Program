@@ -2,7 +2,7 @@ import hashlib
 import os
 import psycopg2
 from datetime import datetime
-from typing import Optional, Callable
+from typing import Callable
 import threading
 
 _stop_background = False  # Глобальный флаг для остановки фоновой проверки
@@ -26,25 +26,19 @@ def connect_to_db(dbname: str, user: str, password: str, host: str = "localhost"
         raise
 
 # Расчет хэша для файла
-def hash_file(file_path: str) -> Optional[str]:
+def hash_file(file_path: str) -> str:
     sha256 = hashlib.sha256()
     try:
         with open(file_path, 'rb') as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 sha256.update(chunk)
         return sha256.hexdigest()
-    except PermissionError as e:
-        print(f"Ошибка доступа к файлу {file_path}: отсутствуют права доступа ({e})")
-        return None
-    except OSError as e:
-        print(f"Ошибка при чтении файла {file_path}: файл используется другим процессом или недоступен ({e})")
-        return None
     except Exception as e:
         print(f"Ошибка при чтении файла {file_path}: {e}")
         return None
 
 # Расчет хэша для папки
-def hash_folder(folder_path: str) -> Optional[str]:
+def hash_folder(folder_path: str) -> str:
     sha256 = hashlib.sha256()
     try:
         for root, _, files in sorted(os.walk(folder_path)):
@@ -56,17 +50,14 @@ def hash_folder(folder_path: str) -> Optional[str]:
                 if file_hash:
                     sha256.update(file_hash.encode('utf-8'))
                 else:
-                    print(f"Пропущен файл {file_path} из-за ошибки доступа, продолжаем расчёт хэша для остальных файлов")
+                    print(f"Ошибка доступа к {file_path}")
         return sha256.hexdigest()
-    except PermissionError as e:
-        print(f"Ошибка доступа к папке {folder_path}: отсутствуют права доступа ({e})")
-        return None
     except Exception as e:
         print(f"Ошибка при обработке папки {folder_path}: {e}")
         return None
 
 # Расчет хэша для ресурса
-def calculate_hash(resource_path: str) -> Optional[str]:
+def calculate_hash(resource_path: str) -> str:
     if not os.path.exists(resource_path):
         print(f"Файл/папка не существует: {resource_path}")
         return None
@@ -94,7 +85,7 @@ def add_resource_to_db(conn, resource_path: str) -> bool:
     current_time = datetime.now()
 
     if not resource_name or not resource_type or not os.path.exists(resource_path):
-        print(f"Не удалось добавить ресурс {resource_path}: некорректные данные или ресурс не существует")
+        print(f"Не удалось добавить ресурс {resource_path}")
         return False
 
     try:
@@ -119,7 +110,7 @@ def add_resource_to_db(conn, resource_path: str) -> bool:
         return False
 
 # Обновление хэшей для всех ресурсов
-def update_all_hashes(conn) -> None:
+def update_all_hashes(conn, stop_flag: threading.Event = None) -> int:
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT resource_path FROM resource_monitoring")
@@ -127,10 +118,13 @@ def update_all_hashes(conn) -> None:
 
             if not resources:
                 print("В базе данных нет ресурсов для расчета хэшей")
-                return
+                return 0
 
             updated_count = 0
             for (resource_path,) in resources:
+                if stop_flag and stop_flag.is_set():
+                    print("Расчёт хэшей остановлен пользователем")
+                    return updated_count
                 hash_value = calculate_hash(resource_path)
                 if hash_value:
                     current_time = datetime.now()
@@ -145,12 +139,14 @@ def update_all_hashes(conn) -> None:
 
             conn.commit()
             print(f"Хэши успешно рассчитаны и обновлены для {updated_count} ресурсов")
+            return updated_count
     except psycopg2.Error as e:
         print(f"Ошибка при обновлении хэшей в БД: {e}")
         conn.rollback()
+        return 0
 
 # Проверка хэшей для всех ресурсов
-def check_all_hashes(conn) -> dict:
+def check_all_hashes(conn, stop_flag: threading.Event = None) -> dict:
     results = {}  # Словарь для хранения результатов проверки
     try:
         with conn.cursor() as cur:
@@ -162,6 +158,9 @@ def check_all_hashes(conn) -> dict:
                 return results
 
             for resource_path, stored_hash in resources:
+                if stop_flag and stop_flag.is_set():
+                    print("Проверка целостности остановлена пользователем")
+                    return results
                 current_hash = calculate_hash(resource_path)
                 if current_hash is None:
                     print(f"Ресурс {resource_path}: невозможно проверить (ресурс недоступен)")
@@ -237,7 +236,11 @@ def start_background_check(conn, interval: int, alert_callback: Callable[[int, l
     _background_event = threading.Event()
 
     def periodic_check():
+        global _stop_background
+        global _background_event
         while not _stop_background:
+            if _background_event is None:  # Проверяем, не сброшен ли event
+                break
             print(f"Начало фоновой проверки в {datetime.now()}")
             # Выполняем проверку и получаем результаты
             results = check_all_hashes(conn)
@@ -252,7 +255,9 @@ def start_background_check(conn, interval: int, alert_callback: Callable[[int, l
             if refresh_callback:
                 # Вызываем обновление таблицы в главном потоке
                 refresh_callback()
-            _background_event.wait(interval)
+            # Проверяем, существует ли event перед вызовом wait
+            if _background_event and not _stop_background:
+                _background_event.wait(interval)
 
     if interval <= 0:
         print("Интервал должен быть положительным числом")
@@ -271,7 +276,6 @@ def stop_background_check() -> None:
     _stop_background = True
     if _background_event:
         _background_event.set()  # Прерываем ожидание
-    # Удаляем вызов join(), чтобы избежать deadlock
+        _background_event = None  # Сбрасываем event
     _background_thread = None
-    _background_event = None
     print("Фоновая проверка остановлена")
