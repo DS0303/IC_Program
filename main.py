@@ -91,7 +91,7 @@ class IntegrityMonitoringApp:
     def create_progress_window(self, title, message):
         progress_window = tk.Toplevel(self.root)
         progress_window.title(title)
-        progress_window.geometry("300x100")  # Уменьшим размер окна, так как прогресс-бара больше нет
+        progress_window.geometry("300x100")
         progress_window.resizable(False, False)
         progress_window.transient(self.root)
         progress_window.grab_set()

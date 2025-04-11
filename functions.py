@@ -5,9 +5,9 @@ from datetime import datetime
 from typing import Callable
 import threading
 
-_stop_background = False  # Глобальный флаг для остановки фоновой проверки
-_background_thread = None  # Глобальная переменная для хранения потока
-_background_event = None  # Объект Event для управления ожиданием
+_stop_background = False
+_background_thread = None
+_background_event = None
 
 # Подключение к базе данных
 def connect_to_db(dbname: str, user: str, password: str, host: str = "localhost", port: str = "5432") -> psycopg2.extensions.connection:
@@ -147,7 +147,7 @@ def update_all_hashes(conn, stop_flag: threading.Event = None) -> int:
 
 # Проверка хэшей для всех ресурсов
 def check_all_hashes(conn, stop_flag: threading.Event = None) -> dict:
-    results = {}  # Словарь для хранения результатов проверки
+    results = {}
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT resource_path, hash FROM resource_monitoring")
@@ -218,44 +218,35 @@ def list_all_resources(conn) -> list:
         conn.rollback()
         return []
 
-# Запуск фоновой проверки с callback для уведомлений о нарушениях и обновления таблицы
+# Запуск фоновой проверки
 def start_background_check(conn, interval: int, alert_callback: Callable[[int, list], None] = None, refresh_callback: Callable[[], None] = None) -> None:
     global _stop_background
     global _background_thread
     global _background_event
 
-    # Сбрасываем флаг остановки
     _stop_background = False
 
-    # Проверяем, не запущен ли уже поток
     if _background_thread and _background_thread.is_alive():
         print("Фоновая проверка уже запущена")
         return
 
-    # Создаём новый объект Event для контроля ожидания
     _background_event = threading.Event()
 
     def periodic_check():
         global _stop_background
         global _background_event
         while not _stop_background:
-            if _background_event is None:  # Проверяем, не сброшен ли event
+            if _background_event is None:
                 break
             print(f"Начало фоновой проверки в {datetime.now()}")
-            # Выполняем проверку и получаем результаты
             results = check_all_hashes(conn)
-            # Подсчитываем количество нарушений (статус "failed") и собираем пути
             failed_paths = [path for path, status in results.items() if status == "failed"]
             failed_count = len(failed_paths)
-            # Если есть нарушения и задан callback, вызываем его
             if failed_count > 0 and alert_callback:
                 alert_callback(failed_count, failed_paths)
-                break  # Прерываем цикл, чтобы остановить фоновую проверку
-            # Обновляем таблицу через callback
+                break
             if refresh_callback:
-                # Вызываем обновление таблицы в главном потоке
                 refresh_callback()
-            # Проверяем, существует ли event перед вызовом wait
             if _background_event and not _stop_background:
                 _background_event.wait(interval)
 
@@ -275,7 +266,7 @@ def stop_background_check() -> None:
 
     _stop_background = True
     if _background_event:
-        _background_event.set()  # Прерываем ожидание
-        _background_event = None  # Сбрасываем event
+        _background_event.set()
+        _background_event = None
     _background_thread = None
     print("Фоновая проверка остановлена")
