@@ -296,17 +296,11 @@ class IntegrityMonitoringApp:
                     return
                 timer_label.config(text=f"До следующей проверки: {remaining_time} сек")
                 if remaining_time > 0:
+                    # Обновление каждую секунду
                     self.root.after(1000, lambda: update_timer(remaining_time - 1))
                 else:
-                    results = func.check_all_hashes(self.conn) # Запуск проверки хэшей
-                    failed_paths = [path for path, status in results.items() if status == "failed"]
-                    failed_count = len(failed_paths)
-                    # Есть ли нарушения
-                    if failed_count > 0:
-                        self.violations_alert(failed_count, failed_paths, timer_window)
-                    else:
-                        self.root.after(0, self.refresh_resources)
-                        self.root.after(0, lambda: update_timer(interval_in_seconds))
+                    # Сброс таймера для следующей итерации
+                    self.root.after(0, lambda: update_timer(interval_in_seconds))
             
             # Запсук фоновой проверки
             func.start_background_check(
