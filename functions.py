@@ -5,11 +5,16 @@ from datetime import datetime
 from typing import Callable
 import threading
 
+# Глобальные переменные для управления потокамии и фоновой проверкой
 _stop_background = False
 _background_thread = None
 _background_event = None
 
 # Подключение к базе данных
+""""
+На вход подаются параметры настройки подключения к БД
+Возвращает строку подключения
+"""
 def connect_to_db(dbname: str, user: str, password: str, host: str = "localhost", port: str = "5432") -> psycopg2.extensions.connection:
     try:
         conn = psycopg2.connect(
@@ -26,6 +31,12 @@ def connect_to_db(dbname: str, user: str, password: str, host: str = "localhost"
         raise
 
 # Расчет хэша для файла
+"""
+Создается объект для вычисления хэша
+Чтение файла происходит блоками по 4096 байт до конца файла, каждый блок добавляется в объект хэш
+Обрабатываются ошибки при чтении файла
+Возвращает хэш в 16-ом формате
+"""
 def hash_file(file_path: str) -> str:
     sha256 = hashlib.sha256()
     try:
@@ -38,6 +49,14 @@ def hash_file(file_path: str) -> str:
         return None
 
 # Расчет хэша для папки
+"""
+Создается объект для вычисления хэша
+Происходит рекурсивный обход всех файлов в папке и ее подпапках
+Относительные пути к файлам добавляется в объект хэш
+В объект хэша добавляется хэш всех файлов
+Обрабатываются ошибки при чтении папки
+Возвращает хэш в 16-ом формате
+"""
 def hash_folder(folder_path: str) -> str:
     sha256 = hashlib.sha256()
     try:
@@ -57,6 +76,12 @@ def hash_folder(folder_path: str) -> str:
         return None
 
 # Расчет хэша для ресурса
+"""
+Если ресурс не существует, выводится сообщение об ошибке
+Если ресурс - файл, вызывается функция расчета хэша файла
+Если ресурс - папка, вызывается функция расчета хэша папки
+Возвращает применяемую функцию для ресурса
+"""
 def calculate_hash(resource_path: str) -> str:
     if not os.path.exists(resource_path):
         print(f"Файл/папка не существует: {resource_path}")
@@ -70,6 +95,11 @@ def calculate_hash(resource_path: str) -> str:
         return None
 
 # Извлечение имени ресурса из пути
+"""
+Функция извлекает имя ресурса из строки пути
+ОБрабатывает ошибки при извлечении
+Возвращает последнюю часть пути после разделителя пути
+"""
 def get_resource_name(resource_path: str) -> str:
     try:
         cleaned_path = resource_path.rstrip(os.sep)
@@ -79,6 +109,13 @@ def get_resource_name(resource_path: str) -> str:
         return ""
 
 # Добавление ресурса в базу данных
+"""
+Получает имя ресурса, тип ресурса, текущее системное время
+Проверяет наличие ресурса в системе
+Подключение к БД
+Получает кол-во таких же ресурсов в БД, если он уже есть в БД, то ресурс пропускается
+Если ресурса нет в БД, то он в нее добавляется
+"""
 def add_resource_to_db(conn, resource_path: str) -> bool:
     resource_name = get_resource_name(resource_path)
     resource_type = "file" if os.path.isfile(resource_path) else "folder" if os.path.isdir(resource_path) else None
@@ -110,6 +147,12 @@ def add_resource_to_db(conn, resource_path: str) -> bool:
         return False
 
 # Обновление хэшей для всех ресурсов
+"""
+Подлкючается к БД
+Для всех ресурсов из БД получает путь, вычисляет новый хэш, обновляет значение хэша в БД
+Позволяет остановаить работу функции, которая работает в отдельном потоке
+Возвращает кол-во обновленных хэшей
+"""
 def update_all_hashes(conn, stop_flag: threading.Event = None) -> int:
     try:
         with conn.cursor() as cur:
@@ -123,7 +166,7 @@ def update_all_hashes(conn, stop_flag: threading.Event = None) -> int:
             updated_count = 0
             for (resource_path,) in resources:
                 if stop_flag and stop_flag.is_set():
-                    print("Расчёт хэшей остановлен пользователем")
+                    print("Расчёт хэшей остановлен")
                     return updated_count
                 hash_value = calculate_hash(resource_path)
                 if hash_value:
@@ -146,6 +189,13 @@ def update_all_hashes(conn, stop_flag: threading.Event = None) -> int:
         return 0
 
 # Проверка хэшей для всех ресурсов
+"""
+Подключается к БД
+Для всех ресурсов из БД получает путь, вычисляет текущий хэш и сравнивает его с хэшем из БД
+Позволяет остановаить работу функции, которая работает в отдельном потоке
+Для каждого ресурса пишет результат проверки
+Возвращает словарь с результатами проверки
+"""
 def check_all_hashes(conn, stop_flag: threading.Event = None) -> dict:
     results = {}
     try:
@@ -183,6 +233,10 @@ def check_all_hashes(conn, stop_flag: threading.Event = None) -> dict:
         return results
 
 # Удаление ресурса из базы данных
+"""
+Подключается к БД
+Для пути проверяет есть ли он в БД, если есть, то удаляет его с БД
+"""
 def remove_resource_from_db(conn, resource_path: str) -> bool:
     try:
         with conn.cursor() as cur:
@@ -203,6 +257,10 @@ def remove_resource_from_db(conn, resource_path: str) -> bool:
         return False
 
 # Получение списка всех ресурсов
+"""
+Подключается к БД
+Возвращает список всех ресурсов с БД
+"""
 def list_all_resources(conn) -> list:
     try:
         with conn.cursor() as cur:
@@ -219,6 +277,14 @@ def list_all_resources(conn) -> list:
         return []
 
 # Запуск фоновой проверки
+"""
+Использует глобальные переменные
+Проверяет не запущена ли уже фоновая проверка
+Создает новый поток
+В этом потоке запускает проверку
+При проверке: запускает функцию проверки хэшей, записывает в список все пути с нарушениями, записывает кол-во путей с нарушениями
+Если найдено нарушение, то фоновая проверка останавливается
+"""
 def start_background_check(conn, interval: int, alert_callback: Callable[[int, list], None] = None, refresh_callback: Callable[[], None] = None) -> None:
     global _stop_background
     global _background_thread
@@ -259,6 +325,10 @@ def start_background_check(conn, interval: int, alert_callback: Callable[[int, l
     print(f"Фоновая проверка запущена с интервалом {interval} секунд")
 
 # Остановка фоновой проверки
+"""
+Использует глобальные переменные
+Изменяет значение этих переменных, если проверку нужно остановить
+"""
 def stop_background_check() -> None:
     global _stop_background
     global _background_thread
