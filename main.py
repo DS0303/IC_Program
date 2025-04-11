@@ -223,6 +223,17 @@ class IntegrityMonitoringApp:
         self.stop_operation_event.clear()
         self.progress_window_active = False
 
+        # Сброс тегов для всех строк в таблице
+        for item in self.tree.get_children():
+            current_tags = self.tree.item(item, "tags")
+            new_tags = tuple(tag for tag in current_tags if tag in ("oddrow", "evenrow"))
+            self.tree.item(item, tags=new_tags)
+            values = self.tree.item(item, "values")
+            self.tree.item(item, values=( "", *values[1:] ))
+
+        # Сброс словаря статусов проверки
+        self.check_status.clear()
+
         # Создание окна прогресса
         progress_window = self.create_progress_window("Расчёт хэшей", "Идёт расчёт эталонов...")
         
