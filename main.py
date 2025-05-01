@@ -4,6 +4,7 @@ import functions as func
 import threading
 from datetime import datetime
 
+
 class IntegrityMonitoringApp:
     # Инициализация окна приложения
     def __init__(self, root):
@@ -24,12 +25,12 @@ class IntegrityMonitoringApp:
             self.root.destroy()
             return
 
-        # Флаги и переменные 
-        self.background_check_running = False # Флаг фоновой проверки
-        self.check_status = {} # Словарь результатов проверки
-        self.operation_running = False # Флаг работы текущей операции
-        self.stop_operation_event = threading.Event() # Остановка текущей операции
-        self.progress_window_active = False # Окно прогресса
+        # Флаги и переменные
+        self.background_check_running = False  # Флаг фоновой проверки
+        self.check_status = {}  # Словарь результатов проверки
+        self.operation_running = False  # Флаг работы текущей операции
+        self.stop_operation_event = threading.Event()  # Остановка текущей операции
+        self.progress_window_active = False  # Окно прогресса
 
         # Создание виджетов
         self.create_widgets()
@@ -40,17 +41,27 @@ class IntegrityMonitoringApp:
         # Фрейм для кнопок
         button_frame = ttk.Frame(self.root)
         button_frame.pack(fill="x", padx=5, pady=5)
-        
+
         # Кнопки
-        self.add_file_button = ttk.Button(button_frame, text="Добавить файл", command=self.add_file)
+        self.add_file_button = ttk.Button(
+            button_frame, text="Добавить файл", command=self.add_file
+        )
         self.add_file_button.pack(side="left", padx=5)
-        self.add_folder_button = ttk.Button(button_frame, text="Добавить папку", command=self.add_folder)
+        self.add_folder_button = ttk.Button(
+            button_frame, text="Добавить папку", command=self.add_folder
+        )
         self.add_folder_button.pack(side="left", padx=5)
-        self.remove_button = ttk.Button(button_frame, text="Удалить", command=self.remove_resource)
+        self.remove_button = ttk.Button(
+            button_frame, text="Удалить", command=self.remove_resource
+        )
         self.remove_button.pack(side="left", padx=5)
-        self.calculate_button = ttk.Button(button_frame, text="Рассчитать хэши", command=self.calculate_hashes)
+        self.calculate_button = ttk.Button(
+            button_frame, text="Рассчитать хэши", command=self.calculate_hashes
+        )
         self.calculate_button.pack(side="left", padx=5)
-        self.check_button = ttk.Button(button_frame, text="Проверить целостность", command=self.check_hashes)
+        self.check_button = ttk.Button(
+            button_frame, text="Проверить целостность", command=self.check_hashes
+        )
         self.check_button.pack(side="left", padx=5)
 
         # Фрейм для фоновой проверки
@@ -58,10 +69,22 @@ class IntegrityMonitoringApp:
         bg_frame.pack(side="left", padx=5)
         ttk.Label(bg_frame, text="Интервал:").pack(side="left")
         self.interval_var = tk.StringVar(value="10")
-        ttk.Entry(bg_frame, textvariable=self.interval_var, width=5).pack(side="left", padx=2)
+        ttk.Entry(bg_frame, textvariable=self.interval_var, width=5).pack(
+            side="left", padx=2
+        )
         self.interval_unit = tk.StringVar(value="сек.")
-        ttk.Combobox(bg_frame, textvariable=self.interval_unit, values=["сек.", "мин.", "ч."], state="readonly", width=10).pack(side="left", padx=2)
-        self.start_bg_button = ttk.Button(bg_frame, text="Запустить фоновую проверку", command=self.start_background_check)
+        ttk.Combobox(
+            bg_frame,
+            textvariable=self.interval_unit,
+            values=["сек.", "мин.", "ч."],
+            state="readonly",
+            width=10,
+        ).pack(side="left", padx=2)
+        self.start_bg_button = ttk.Button(
+            bg_frame,
+            text="Запустить фоновую проверку",
+            command=self.start_background_check,
+        )
         self.start_bg_button.pack(side="left", padx=2)
 
         # Фрейм таблицы ресурсов
@@ -94,7 +117,9 @@ class IntegrityMonitoringApp:
         self.tree.column("hash_date", width=12)
 
         # Настройка полосы прокрутки
-        scrollbar = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
+        scrollbar = ttk.Scrollbar(
+            self.tree_frame, orient="vertical", command=self.tree.yview
+        )
         scrollbar.pack(side="right", fill="y")
         self.tree.configure(yscrollcommand=scrollbar.set)
         self.tree.pack(fill="both", expand=True)
@@ -102,7 +127,7 @@ class IntegrityMonitoringApp:
         # Обновление таблицы ресурсов
         self.refresh_resources()
 
-    # Создание окна при выполнении операции 
+    # Создание окна при выполнении операции
     def create_progress_window(self, title, message):
         # Настройка окна
         progress_window = tk.Toplevel(self.root)
@@ -117,7 +142,11 @@ class IntegrityMonitoringApp:
         progress_label.pack(pady=10)
 
         # Кнопка остановки операции
-        stop_button = ttk.Button(progress_window, text="Остановить", command=lambda: self.stop_current_operation(progress_window))
+        stop_button = ttk.Button(
+            progress_window,
+            text="Остановить",
+            command=lambda: self.stop_current_operation(progress_window),
+        )
         stop_button.pack(pady=10)
 
         # Отключение кнопок на основном окне при открытии окна выполнения операции
@@ -136,11 +165,17 @@ class IntegrityMonitoringApp:
         timer_window.grab_set()
 
         # Таймер до следующей проверки
-        timer_label = ttk.Label(timer_window, text=f"До следующей проверки: {interval_in_seconds} сек")
+        timer_label = ttk.Label(
+            timer_window, text=f"До следующей проверки: {interval_in_seconds} сек"
+        )
         timer_label.pack(pady=10)
 
         # Кнопка остановить
-        stop_button = ttk.Button(timer_window, text="Остановить", command=lambda: self.stop_background_check(timer_window))
+        stop_button = ttk.Button(
+            timer_window,
+            text="Остановить",
+            command=lambda: self.stop_background_check(timer_window),
+        )
         stop_button.pack(pady=10)
 
         # Отключение кнопок на основном окне при открытии окна выполнения операции
@@ -167,27 +202,35 @@ class IntegrityMonitoringApp:
 
     # Остановка текущей операции
     def stop_current_operation(self, progress_window):
-        self.stop_operation_event.set() # Установка флага остановки
+        self.stop_operation_event.set()  # Установка флага остановки
         self.progress_window_active = False
-        progress_window.destroy() # Закрытие окна прогресса
-        self.enable_main_buttons() # Включение кнопок на основном окне
+        progress_window.destroy()  # Закрытие окна прогресса
+        self.enable_main_buttons()  # Включение кнопок на основном окне
         self.operation_running = False
 
     # Оповещение о нарушении целостности при фоновой проверке
     def violations_alert(self, failed_count, failed_paths, timer_window=None):
-        paths_str = "\n".join(failed_paths) # Список путей с нарушенияии
+        paths_str = "\n".join(failed_paths)  # Список путей с нарушенияии
         # Вывод результатов и остановка фоновой проверки
-        self.root.after(0, lambda: messagebox.showwarning("Нарушение целостности", f"Обнаружено нарушений целостности: {failed_count}\nФоновая проверка остановлена\n\nПути с нарушениями:\n{paths_str}"))
+        self.root.after(
+            0,
+            lambda: messagebox.showwarning(
+                "Нарушение целостности",
+                f"Обнаружено нарушений целостности: {failed_count}\nФоновая проверка остановлена\n\nПути с нарушениями:\n{paths_str}",
+            ),
+        )
         self.root.after(0, lambda: self.stop_background_check(timer_window))
         self.root.after(0, self.check_hashes)
 
     # Добавление файла в БД
     def add_file(self):
         # Диалог выбора файла
-        path = filedialog.askopenfilename(title="Выберите файл", filetypes=[("Все файлы", "*.*")])
+        path = filedialog.askopenfilename(
+            title="Выберите файл", filetypes=[("Все файлы", "*.*")]
+        )
         if path:
             if func.add_resource_to_db(self.conn, path):
-                self.refresh_resources() # Обновление таблицы
+                self.refresh_resources()  # Обновление таблицы
 
     # Добавление папки в БД
     def add_folder(self):
@@ -195,7 +238,7 @@ class IntegrityMonitoringApp:
         path = filedialog.askdirectory(title="Выберите папку")
         if path:
             if func.add_resource_to_db(self.conn, path):
-                self.refresh_resources() # Обновление таблицы
+                self.refresh_resources()  # Обновление таблицы
 
     # Удаление ресурса из БД
     def remove_resource(self):
@@ -205,13 +248,13 @@ class IntegrityMonitoringApp:
             messagebox.showwarning("Предупреждение", "Выберите ресурс для удаления")
             return
 
-        path = self.tree.item(selected[0])["values"][1] # Получение пути
+        path = self.tree.item(selected[0])["values"][1]  # Получение пути
         # Подтверждение удаления и удаление
         if messagebox.askyesno("Подтверждение", f"Удалить ресурс {path}?"):
             func.remove_resource_from_db(self.conn, path)
             if path in self.check_status:
                 del self.check_status[path]
-            self.refresh_resources() # Обновление таблицы
+            self.refresh_resources()  # Обновление таблицы
 
     # Расчет хэшей
     def calculate_hashes(self):
@@ -226,17 +269,21 @@ class IntegrityMonitoringApp:
         # Сброс тегов для всех строк в таблице
         for item in self.tree.get_children():
             current_tags = self.tree.item(item, "tags")
-            new_tags = tuple(tag for tag in current_tags if tag in ("oddrow", "evenrow"))
+            new_tags = tuple(
+                tag for tag in current_tags if tag in ("oddrow", "evenrow")
+            )
             self.tree.item(item, tags=new_tags)
             values = self.tree.item(item, "values")
-            self.tree.item(item, values=( "", *values[1:] ))
+            self.tree.item(item, values=("", *values[1:]))
 
         # Сброс словаря статусов проверки
         self.check_status.clear()
 
         # Создание окна прогресса
-        progress_window = self.create_progress_window("Расчёт хэшей", "Идёт расчёт эталонов...")
-        
+        progress_window = self.create_progress_window(
+            "Расчёт хэшей", "Идёт расчёт эталонов..."
+        )
+
         # Запуск расчета хэшей
         def run_calculate():
             updated_count = func.update_all_hashes(self.conn, self.stop_operation_event)
@@ -250,20 +297,22 @@ class IntegrityMonitoringApp:
         # Проверка не выполняется ли уже операция
         if self.operation_running:
             return
-        
+
         # Перезапись флагов
         self.operation_running = True
         self.stop_operation_event.clear()
         self.progress_window_active = False
 
         # Создание окна прогресса
-        progress_window = self.create_progress_window("Проверка целостности", "Идёт проверка целостности...")
+        progress_window = self.create_progress_window(
+            "Проверка целостности", "Идёт проверка целостности..."
+        )
 
         # Запуск проверки
         def run_check():
             results = func.check_all_hashes(self.conn, self.stop_operation_event)
             self.root.after(0, lambda: self.finish_operation(progress_window, results))
-        
+
         # Запуск отдельного потока
         threading.Thread(target=run_check, daemon=True).start()
 
@@ -272,12 +321,12 @@ class IntegrityMonitoringApp:
         # Результаты проверки
         if results is not None:
             self.check_status = results
-        self.refresh_resources() # Обновление таблицы
+        self.refresh_resources()  # Обновление таблицы
         self.progress_window_active = False
-        progress_window.destroy() # Закрытии окна прогресса
-        self.enable_main_buttons() # Включение кнопок на основном окне
+        progress_window.destroy()  # Закрытии окна прогресса
+        self.enable_main_buttons()  # Включение кнопок на основном окне
         self.operation_running = False
-        self.stop_operation_event.clear() # Сброс флага
+        self.stop_operation_event.clear()  # Сброс флага
 
     # Запуск фоновой проверки
     def start_background_check(self):
@@ -290,13 +339,16 @@ class IntegrityMonitoringApp:
             unit = self.interval_unit.get()
             if unit not in ["сек.", "мин.", "ч."]:
                 raise ValueError("Некорректная единица измерения интервала")
-            
-            # Перевод интервала в секунды
-            if unit == "сек.": interval_in_seconds = interval
-            elif unit == "мин.":interval_in_seconds = interval * 60
-            elif unit == "ч.": interval_in_seconds = interval * 3600
 
-            self.background_check_running = True # Установка флага
+            # Перевод интервала в секунды
+            if unit == "сек.":
+                interval_in_seconds = interval
+            elif unit == "мин.":
+                interval_in_seconds = interval * 60
+            elif unit == "ч.":
+                interval_in_seconds = interval * 3600
+
+            self.background_check_running = True  # Установка флага
 
             # Создание окна таймера
             timer_window, timer_label = self.create_timer_window(interval_in_seconds)
@@ -312,15 +364,15 @@ class IntegrityMonitoringApp:
                 else:
                     # Сброс таймера для следующей итерации
                     self.root.after(0, lambda: update_timer(interval_in_seconds))
-            
+
             # Запсук фоновой проверки
             func.start_background_check(
                 self.conn,
                 interval_in_seconds,
                 lambda count, paths: self.violations_alert(count, paths, timer_window),
-                lambda: self.root.after(0, self.refresh_resources)
+                lambda: self.root.after(0, self.refresh_resources),
             )
-            update_timer(interval_in_seconds) # Запуск таймера
+            update_timer(interval_in_seconds)  # Запуск таймера
 
         except ValueError as e:
             messagebox.showerror("Ошибка", str(e))
@@ -331,8 +383,8 @@ class IntegrityMonitoringApp:
         self.background_check_running = False
         func.stop_background_check()
         if timer_window:
-            timer_window.destroy() # Закрытие окна таймера
-            self.enable_main_buttons() # Включение кнопок на основном окне
+            timer_window.destroy()  # Закрытие окна таймера
+            self.enable_main_buttons()  # Включение кнопок на основном окне
 
     # Обновление таблицы ресурсов
     def refresh_resources(self):
@@ -340,12 +392,14 @@ class IntegrityMonitoringApp:
         resources = func.list_all_resources(self.conn)
         for item in self.tree.get_children():
             self.tree.delete(item)
-        
+
         # Заполнение таблицы
         for res in resources:
             path, name, rtype, added, _, hash_date = res
             # Форматирование дат
-            hash_date_str = hash_date.strftime("%d-%m-%Y %H:%M:%S") if hash_date else "Нет данных"
+            hash_date_str = (
+                hash_date.strftime("%d-%m-%Y %H:%M:%S") if hash_date else "Нет данных"
+            )
             added_str = added.strftime("%d-%m-%Y %H:%M:%S") if added else "Нет данных"
 
             # Тип ресурса
@@ -356,7 +410,9 @@ class IntegrityMonitoringApp:
 
             # Статус проверки и цвет строки
             status = ""
-            tags = ("oddrow",) if len(self.tree.get_children()) % 2 == 0 else ("evenrow",)
+            tags = (
+                ("oddrow",) if len(self.tree.get_children()) % 2 == 0 else ("evenrow",)
+            )
             if path in self.check_status:
                 if self.check_status[path] == "passed":
                     status = "\u2714"
@@ -368,14 +424,20 @@ class IntegrityMonitoringApp:
                     status = "N/A"
                     tags = ("unavailable",)
                 elif self.check_status[path] == "no_hash":
-                    status = "\u003F"
+                    status = "\u003f"
                     tags = ("unavailable",)
-            self.tree.insert("", "end", values=(status, path, name, rtype, added_str, hash_date_str), tags=tags)
+            self.tree.insert(
+                "",
+                "end",
+                values=(status, path, name, rtype, added_str, hash_date_str),
+                tags=tags,
+            )
 
     # Закрытие соединения с БД и закрытие главного окна
     def on_closing(self):
         self.conn.close()
         self.root.destroy()
+
 
 # Запуск приложения
 if __name__ == "__main__":

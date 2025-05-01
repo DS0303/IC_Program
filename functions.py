@@ -15,20 +15,21 @@ _background_event = None
 На вход подаются параметры настройки подключения к БД
 Возвращает строку подключения
 """
-def connect_to_db(dbname: str, user: str, password: str, host: str = "localhost", port: str = "5432") -> psycopg2.extensions.connection:
+
+
+def connect_to_db(
+    dbname: str, user: str, password: str, host: str = "localhost", port: str = "5432"
+) -> psycopg2.extensions.connection:
     try:
         conn = psycopg2.connect(
-            dbname=dbname,
-            user=user,
-            password=password,
-            host=host,
-            port=port
+            dbname=dbname, user=user, password=password, host=host, port=port
         )
         print(f"Успешно подключено к базе данных {dbname}")
         return conn
     except psycopg2.Error as e:
         print(f"Ошибка подключения к БД: {e}")
         raise
+
 
 # Расчет хэша для файла
 """
@@ -37,16 +38,19 @@ def connect_to_db(dbname: str, user: str, password: str, host: str = "localhost"
 Обрабатываются ошибки при чтении файла
 Возвращает хэш в 16-ом формате
 """
+
+
 def hash_file(file_path: str) -> str:
     sha256 = hashlib.sha256()
     try:
-        with open(file_path, 'rb') as f:
+        with open(file_path, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 sha256.update(chunk)
         return sha256.hexdigest()
     except Exception as e:
         print(f"Ошибка при чтении файла {file_path}: {e}")
         return None
+
 
 # Расчет хэша для папки
 """
@@ -57,23 +61,26 @@ def hash_file(file_path: str) -> str:
 Обрабатываются ошибки при чтении папки
 Возвращает хэш в 16-ом формате
 """
+
+
 def hash_folder(folder_path: str) -> str:
     sha256 = hashlib.sha256()
     try:
         for root, _, files in sorted(os.walk(folder_path)):
             for filename in sorted(files):
                 file_path = os.path.join(root, filename)
-                rel_path = os.path.relpath(file_path, folder_path).encode('utf-8')
+                rel_path = os.path.relpath(file_path, folder_path).encode("utf-8")
                 sha256.update(rel_path)
                 file_hash = hash_file(file_path)
                 if file_hash:
-                    sha256.update(file_hash.encode('utf-8'))
+                    sha256.update(file_hash.encode("utf-8"))
                 else:
                     print(f"Ошибка доступа к {file_path}")
         return sha256.hexdigest()
     except Exception as e:
         print(f"Ошибка при обработке папки {folder_path}: {e}")
         return None
+
 
 # Расчет хэша для ресурса
 """
@@ -82,6 +89,8 @@ def hash_folder(folder_path: str) -> str:
 Если ресурс - папка, вызывается функция расчета хэша папки
 Возвращает применяемую функцию для ресурса
 """
+
+
 def calculate_hash(resource_path: str) -> str:
     if not os.path.exists(resource_path):
         print(f"Файл/папка не существует: {resource_path}")
@@ -94,12 +103,15 @@ def calculate_hash(resource_path: str) -> str:
         print(f"Неподдерживаемый тип: {resource_path}")
         return None
 
+
 # Извлечение имени ресурса из пути
 """
 Функция извлекает имя ресурса из строки пути
 ОБрабатывает ошибки при извлечении
 Возвращает последнюю часть пути после разделителя пути
 """
+
+
 def get_resource_name(resource_path: str) -> str:
     try:
         cleaned_path = resource_path.rstrip(os.sep)
@@ -107,6 +119,7 @@ def get_resource_name(resource_path: str) -> str:
     except Exception as e:
         print(f"Ошибка при извлечении имени из пути {resource_path}: {e}")
         return ""
+
 
 # Добавление ресурса в базу данных
 """
@@ -116,9 +129,15 @@ def get_resource_name(resource_path: str) -> str:
 Получает кол-во таких же ресурсов в БД, если он уже есть в БД, то ресурс пропускается
 Если ресурса нет в БД, то он в нее добавляется
 """
+
+
 def add_resource_to_db(conn, resource_path: str) -> bool:
     resource_name = get_resource_name(resource_path)
-    resource_type = "file" if os.path.isfile(resource_path) else "folder" if os.path.isdir(resource_path) else None
+    resource_type = (
+        "file"
+        if os.path.isfile(resource_path)
+        else "folder" if os.path.isdir(resource_path) else None
+    )
     current_time = datetime.now()
 
     if not resource_name or not resource_type or not os.path.exists(resource_path):
@@ -127,17 +146,23 @@ def add_resource_to_db(conn, resource_path: str) -> bool:
 
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM resource_monitoring WHERE resource_path = %s", (resource_path,))
+            cur.execute(
+                "SELECT COUNT(*) FROM resource_monitoring WHERE resource_path = %s",
+                (resource_path,),
+            )
             count = cur.fetchone()[0]
 
             if count > 0:
                 print(f"Ресурс {resource_path} уже существует в базе данных")
                 return False
 
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO resource_monitoring (resource_path, resource_name, resource_type, added_date)
                 VALUES (%s, %s, %s, %s)
-            """, (resource_path, resource_name, resource_type, current_time))
+            """,
+                (resource_path, resource_name, resource_type, current_time),
+            )
             conn.commit()
             print(f"Ресурс {resource_path} успешно добавлен в БД")
             return True
@@ -146,6 +171,7 @@ def add_resource_to_db(conn, resource_path: str) -> bool:
         conn.rollback()
         return False
 
+
 # Обновление хэшей для всех ресурсов
 """
 Подлкючается к БД
@@ -153,6 +179,8 @@ def add_resource_to_db(conn, resource_path: str) -> bool:
 Позволяет остановаить работу функции, которая работает в отдельном потоке
 Возвращает кол-во обновленных хэшей
 """
+
+
 def update_all_hashes(conn, stop_flag: threading.Event = None) -> int:
     try:
         with conn.cursor() as cur:
@@ -171,11 +199,14 @@ def update_all_hashes(conn, stop_flag: threading.Event = None) -> int:
                 hash_value = calculate_hash(resource_path)
                 if hash_value:
                     current_time = datetime.now()
-                    cur.execute("""
+                    cur.execute(
+                        """
                         UPDATE resource_monitoring
                         SET hash = %s, hash_date = %s
                         WHERE resource_path = %s
-                    """, (hash_value, current_time, resource_path))
+                    """,
+                        (hash_value, current_time, resource_path),
+                    )
                     updated_count += 1
                 else:
                     print(f"Не удалось рассчитать хэш для {resource_path}, пропускаем")
@@ -188,6 +219,7 @@ def update_all_hashes(conn, stop_flag: threading.Event = None) -> int:
         conn.rollback()
         return 0
 
+
 # Проверка хэшей для всех ресурсов
 """
 Подключается к БД
@@ -196,6 +228,8 @@ def update_all_hashes(conn, stop_flag: threading.Event = None) -> int:
 Для каждого ресурса пишет результат проверки
 Возвращает словарь с результатами проверки
 """
+
+
 def check_all_hashes(conn, stop_flag: threading.Event = None) -> dict:
     results = {}
     try:
@@ -213,7 +247,9 @@ def check_all_hashes(conn, stop_flag: threading.Event = None) -> dict:
                     return results
                 current_hash = calculate_hash(resource_path)
                 if current_hash is None:
-                    print(f"Ресурс {resource_path}: невозможно проверить (ресурс недоступен)")
+                    print(
+                        f"Ресурс {resource_path}: невозможно проверить (ресурс недоступен)"
+                    )
                     results[resource_path] = "unavailable"
                 elif stored_hash is None:
                     print(f"Ресурс {resource_path}: хэш в БД отсутствует")
@@ -222,7 +258,9 @@ def check_all_hashes(conn, stop_flag: threading.Event = None) -> dict:
                     print(f"Ресурс {resource_path}: целостность подтверждена")
                     results[resource_path] = "passed"
                 else:
-                    print(f"Ресурс {resource_path}: целостность нарушена (хэш изменился)")
+                    print(
+                        f"Ресурс {resource_path}: целостность нарушена (хэш изменился)"
+                    )
                     results[resource_path] = "failed"
 
             conn.commit()
@@ -232,22 +270,31 @@ def check_all_hashes(conn, stop_flag: threading.Event = None) -> dict:
         conn.rollback()
         return results
 
+
 # Удаление ресурса из базы данных
 """
 Подключается к БД
 Для пути проверяет есть ли он в БД, если есть, то удаляет его с БД
 """
+
+
 def remove_resource_from_db(conn, resource_path: str) -> bool:
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM resource_monitoring WHERE resource_path = %s", (resource_path,))
+            cur.execute(
+                "SELECT COUNT(*) FROM resource_monitoring WHERE resource_path = %s",
+                (resource_path,),
+            )
             count = cur.fetchone()[0]
-            
+
             if count == 0:
                 print(f"Ресурс {resource_path} не найден в базе данных")
                 return False
-            
-            cur.execute("DELETE FROM resource_monitoring WHERE resource_path = %s", (resource_path,))
+
+            cur.execute(
+                "DELETE FROM resource_monitoring WHERE resource_path = %s",
+                (resource_path,),
+            )
             conn.commit()
             print(f"Ресурс {resource_path} успешно удалён из БД")
             return True
@@ -256,25 +303,31 @@ def remove_resource_from_db(conn, resource_path: str) -> bool:
         conn.rollback()
         return False
 
+
 # Получение списка всех ресурсов
 """
 Подключается к БД
 Возвращает список всех ресурсов с БД
 """
+
+
 def list_all_resources(conn) -> list:
     try:
         with conn.cursor() as cur:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT resource_path, resource_name, resource_type, added_date, hash, hash_date 
                 FROM resource_monitoring
                 ORDER BY added_date
-            """)
+            """
+            )
             resources = cur.fetchall()
             return resources
     except psycopg2.Error as e:
         print(f"Ошибка при получении списка ресурсов: {e}")
         conn.rollback()
         return []
+
 
 # Запуск фоновой проверки
 """
@@ -285,7 +338,14 @@ def list_all_resources(conn) -> list:
 При проверке: запускает функцию проверки хэшей, записывает в список все пути с нарушениями, записывает кол-во путей с нарушениями
 Если найдено нарушение, то фоновая проверка останавливается
 """
-def start_background_check(conn, interval: int, alert_callback: Callable[[int, list], None] = None, refresh_callback: Callable[[], None] = None) -> None:
+
+
+def start_background_check(
+    conn,
+    interval: int,
+    alert_callback: Callable[[int, list], None] = None,
+    refresh_callback: Callable[[], None] = None,
+) -> None:
     global _stop_background
     global _background_thread
     global _background_event
@@ -306,7 +366,9 @@ def start_background_check(conn, interval: int, alert_callback: Callable[[int, l
                 break
             print(f"Начало фоновой проверки в {datetime.now()}")
             results = check_all_hashes(conn)
-            failed_paths = [path for path, status in results.items() if status == "failed"]
+            failed_paths = [
+                path for path, status in results.items() if status == "failed"
+            ]
             failed_count = len(failed_paths)
             if failed_count > 0 and alert_callback:
                 alert_callback(failed_count, failed_paths)
@@ -324,11 +386,14 @@ def start_background_check(conn, interval: int, alert_callback: Callable[[int, l
     _background_thread.start()
     print(f"Фоновая проверка запущена с интервалом {interval} секунд")
 
+
 # Остановка фоновой проверки
 """
 Использует глобальные переменные
 Изменяет значение этих переменных, если проверку нужно остановить
 """
+
+
 def stop_background_check() -> None:
     global _stop_background
     global _background_thread
